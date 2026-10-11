@@ -36,7 +36,7 @@ private sealed interface Anchor {
 class ReaderViewModel(app: Application, private val bookId: String) : AndroidViewModel(app) {
 
     private val repo = (app as ReaderApp).books
-    private val appScope = app.appScope
+    private val appScope = (app as ReaderApp).appScope
 
     private val _state = MutableStateFlow(ReaderState())
     val state: StateFlow<ReaderState> = _state.asStateFlow()

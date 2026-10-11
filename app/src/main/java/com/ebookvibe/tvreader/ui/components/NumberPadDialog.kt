@@ -66,12 +66,13 @@ fun NumberPadDialog(
     }
 
     val firstFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
-        withFrameNanos { }
-        runCatching { firstFocus.requestFocus() }
-    }
 
     Dialog(onDismissRequest = onDismiss) {
+        // Inside the dialog window so the requester is attached before we ask for focus.
+        LaunchedEffect(Unit) {
+            withFrameNanos { }
+            runCatching { firstFocus.requestFocus() }
+        }
         Column(
             modifier = Modifier
                 .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(20.dp))
