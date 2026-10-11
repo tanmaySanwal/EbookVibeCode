@@ -59,7 +59,9 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import com.ebookvibe.tvreader.ui.components.DialogOption
 import com.ebookvibe.tvreader.ui.components.NumberPadDialog
+import com.ebookvibe.tvreader.ui.components.OptionsDialog
 import com.ebookvibe.tvreader.ui.components.TvButton
 import com.ebookvibe.tvreader.ui.theme.SafeMargin
 import kotlinx.coroutines.coroutineScope
@@ -234,6 +236,17 @@ fun ReaderScreen(bookId: String, onClose: () -> Unit) {
             },
             onDismiss = vm::closeDialog,
         )
+        ReaderDialog.ZOOM -> OptionsDialog(
+            title = "Zoom",
+            subtitle = "PDF text can't reflow, so bigger text = zoom",
+            options = ZoomLevel.entries.map { z ->
+                DialogOption(z.label, selected = z == state.zoom) {
+                    vm.setZoom(z)
+                    vm.closeDialog()
+                }
+            },
+            onDismiss = vm::closeDialog,
+        )
         else -> Unit
     }
 }
@@ -328,6 +341,13 @@ private fun Toolbar(
                 )
                 TvButton("Close", onClick = onClose)
             }
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                TvButton("A−", onClick = vm::zoomOut)
+                TvButton("Zoom: ${state.zoom.label}", onClick = { vm.openDialog(ReaderDialog.ZOOM) })
+                TvButton("A+", onClick = vm::zoomIn)
+                TvButton(if (state.panMode) "Mode: Pan" else "Mode: Turn", onClick = vm::togglePanMode)
+                TvButton("Page: ${state.theme.label}", onClick = vm::cycleTheme)
+            }
             Text(
                 "OK: controls  ·  hold OK: pan / turn mode  ·  BACK: hide",
                 style = MaterialTheme.typography.bodySmall,
@@ -362,7 +382,6 @@ private fun pageBackground(theme: PageTheme): Color = when (theme) {
     PageTheme.SEPIA -> Color(0xFF1E1810)
 }
 
-/** Colour treatment for the page bitmap; filled in with dark / sepia matrices in PageColors.kt. */
 private fun pageColorFilter(theme: PageTheme): ColorFilter? = PageColors.filterFor(theme)
 
 /** Keeps the projector awake while reading; cleared when [enabled] turns false or the reader closes. */
