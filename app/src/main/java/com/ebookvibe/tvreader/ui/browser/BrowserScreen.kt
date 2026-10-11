@@ -130,6 +130,7 @@ private fun EntriesList(
 ) {
     val listState = rememberLazyListState()
     val focusRequester = remember { FocusRequester() }
+    val emptyFocus = remember { FocusRequester() }
     val atRoot = state.dir?.absolutePath == state.root?.dir?.absolutePath
     // Row 0 is "parent folder" when we are below the root.
     val offset = if (atRoot) 0 else 1
@@ -140,7 +141,12 @@ private fun EntriesList(
 
     LaunchedEffect(state.dir, state.entries, state.loading) {
         if (state.loading) return@LaunchedEffect
-        if (state.entries.isEmpty() && atRoot) return@LaunchedEffect
+        if (state.entries.isEmpty()) {
+            // Nothing to list: focus the parent row if there is one, else the system-picker button.
+            withFrameNanos { }
+            runCatching { if (atRoot) emptyFocus.requestFocus() else focusRequester.requestFocus() }
+            return@LaunchedEffect
+        }
         listState.scrollToItem(focusIndex)
         withFrameNanos { }
         runCatching { focusRequester.requestFocus() }
@@ -181,7 +187,7 @@ private fun EntriesList(
                 Column(Modifier.padding(16.dp)) {
                     Text("No folders or PDF files here.", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(16.dp))
-                    TvButton("Use system file picker", onClick = pickSystem)
+                    TvButton("Use system file picker", onClick = pickSystem, modifier = Modifier.focusRequester(emptyFocus))
                 }
             }
         }

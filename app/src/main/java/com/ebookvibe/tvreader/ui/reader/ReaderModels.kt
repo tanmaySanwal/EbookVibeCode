@@ -17,11 +17,13 @@ enum class ZoomLevel(val label: String) {
     P300("300%");
 
     /** Device pixels per PDF point for a page of [page] size shown in a [vw]x[vh] viewport. */
-    fun scale(page: Size, vw: Int, vh: Int): Float {
-        val fitPage = minOf(vw / page.width.toFloat(), vh / page.height.toFloat())
+    fun scale(page: Size, vw: Int, vh: Int): Float = scale(page.width.toFloat(), page.height.toFloat(), vw, vh)
+
+    fun scale(pageW: Float, pageH: Float, vw: Int, vh: Int): Float {
+        val fitPage = minOf(vw / pageW, vh / pageH)
         return when (this) {
             FIT_PAGE -> fitPage
-            FIT_WIDTH -> vw / page.width.toFloat()
+            FIT_WIDTH -> vw / pageW
             P125 -> fitPage * 1.25f
             P150 -> fitPage * 1.5f
             P200 -> fitPage * 2f
@@ -34,7 +36,10 @@ enum class ZoomLevel(val label: String) {
 
         /** Presets sorted by actual magnification for this page, for the zoom +/- buttons. */
         fun ordered(page: Size, vw: Int, vh: Int): List<ZoomLevel> =
-            entries.sortedBy { it.scale(page, vw, vh) }
+            ordered(page.width.toFloat(), page.height.toFloat(), vw, vh)
+
+        fun ordered(pageW: Float, pageH: Float, vw: Int, vh: Int): List<ZoomLevel> =
+            entries.sortedBy { it.scale(pageW, pageH, vw, vh) }
     }
 }
 

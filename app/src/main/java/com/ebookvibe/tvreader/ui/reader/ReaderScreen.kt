@@ -39,6 +39,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
@@ -194,6 +195,18 @@ fun ReaderScreen(bookId: String, onClose: () -> Unit) {
             ErrorPanel(state.error!!, onClose)
         } else if (state.loading && state.image == null) {
             Text("Opening…", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.align(Alignment.Center))
+        } else if (state.loading) {
+            // Re-render in progress (zoom change or an uncached page): keep the old page up, show a hint.
+            Text(
+                "Rendering…",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(SafeMargin)
+                    .background(Color(0xB3000000), RoundedCornerShape(10.dp))
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+            )
         }
 
         AnimatedVisibility(
@@ -303,12 +316,12 @@ fun ReaderScreen(bookId: String, onClose: () -> Unit) {
 private fun PageCanvas(state: ReaderState, modifier: Modifier) {
     val panX = remember { Animatable(0f) }
     val panY = remember { Animatable(0f) }
-    var lastShownPage by remember { mutableIntStateOf(-1) }
+    var lastImage by remember { mutableStateOf<ImageBitmap?>(null) }
 
-    LaunchedEffect(state.panX, state.panY, state.shownPage) {
-        if (state.shownPage != lastShownPage) {
-            // New page: jump straight to its position, no sliding.
-            lastShownPage = state.shownPage
+    LaunchedEffect(state.panX, state.panY, state.image) {
+        if (state.image !== lastImage) {
+            // New page or new zoom: jump straight to its position, no sliding.
+            lastImage = state.image
             panX.snapTo(state.panX)
             panY.snapTo(state.panY)
         } else {

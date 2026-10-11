@@ -6,13 +6,21 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Surface
+import androidx.tv.material3.SurfaceDefaults
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.ebookvibe.tvreader.data.BookRepository
 import com.ebookvibe.tvreader.ui.browser.BrowserScreen
 import com.ebookvibe.tvreader.ui.home.HomeScreen
 import com.ebookvibe.tvreader.ui.reader.ReaderScreen
@@ -31,58 +39,73 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             TvReaderTheme {
-                val nav = rememberNavController()
-                fun openBook(id: String) {
-                    books.touch(id)
-                    nav.navigate(Routes.reader(id)) { launchSingleTop = true }
-                }
-
-                LaunchedEffect(Unit) {
-                    pendingOpen.collect { id ->
-                        if (id != null) {
-                            pendingOpen.value = null
-                            nav.popBackStack(Routes.HOME, inclusive = false)
-                            openBook(id)
-                        }
-                    }
-                }
-
-                NavHost(
-                    navController = nav,
-                    startDestination = Routes.HOME,
-                    // Instant screen switches: cheaper on low-end TV hardware.
-                    enterTransition = { EnterTransition.None },
-                    exitTransition = { ExitTransition.None },
+                // Root surface supplies the light-on-dark content colour every Text inherits.
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    shape = RectangleShape,
+                    colors = SurfaceDefaults.colors(
+                        containerColor = MaterialTheme.colorScheme.background,
+                        contentColor = MaterialTheme.colorScheme.onBackground,
+                    ),
                 ) {
-                    composable(Routes.HOME) {
-                        HomeScreen(
-                            onOpenBrowser = { nav.navigate(Routes.BROWSER) },
-                            onOpenBook = ::openBook,
-                            onOpenUri = { openBook(it.toString()) },
-                        )
-                    }
-                    composable(Routes.BROWSER) {
-                        BrowserScreen(
-                            onOpenFile = { path ->
-                                // Replace the browser so BACK from the reader goes home.
-                                nav.popBackStack(Routes.HOME, inclusive = false)
-                                openBook(path)
-                            },
-                            onOpenUri = { uri ->
-                                nav.popBackStack(Routes.HOME, inclusive = false)
-                                openBook(uri.toString())
-                            },
-                            onExit = { nav.popBackStack() },
-                        )
-                    }
-                    composable(
-                        route = Routes.READER,
-                        arguments = listOf(navArgument("id") { type = NavType.StringType }),
-                    ) { entry ->
-                        val id = entry.arguments?.getString("id").orEmpty()
-                        ReaderScreen(bookId = id, onClose = { nav.closeReader() })
-                    }
+                    AppNavHost(books)
                 }
+            }
+        }
+    }
+
+    @Composable
+    private fun AppNavHost(books: BookRepository) {
+        val nav = rememberNavController()
+        fun openBook(id: String) {
+            books.touch(id)
+            nav.navigate(Routes.reader(id)) { launchSingleTop = true }
+        }
+
+        LaunchedEffect(Unit) {
+            pendingOpen.collect { id ->
+                if (id != null) {
+                    pendingOpen.value = null
+                    nav.popBackStack(Routes.HOME, inclusive = false)
+                    openBook(id)
+                }
+            }
+        }
+
+        NavHost(
+            navController = nav,
+            startDestination = Routes.HOME,
+            // Instant screen switches: cheaper on low-end TV hardware.
+            enterTransition = { EnterTransition.None },
+            exitTransition = { ExitTransition.None },
+        ) {
+            composable(Routes.HOME) {
+                HomeScreen(
+                    onOpenBrowser = { nav.navigate(Routes.BROWSER) },
+                    onOpenBook = ::openBook,
+                    onOpenUri = { openBook(it.toString()) },
+                )
+            }
+            composable(Routes.BROWSER) {
+                BrowserScreen(
+                    onOpenFile = { path ->
+                        // Replace the browser so BACK from the reader goes home.
+                        nav.popBackStack(Routes.HOME, inclusive = false)
+                        openBook(path)
+                    },
+                    onOpenUri = { uri ->
+                        nav.popBackStack(Routes.HOME, inclusive = false)
+                        openBook(uri.toString())
+                    },
+                    onExit = { nav.popBackStack() },
+                )
+            }
+            composable(
+                route = Routes.READER,
+                arguments = listOf(navArgument("id") { type = NavType.StringType }),
+            ) { entry ->
+                val id = entry.arguments?.getString("id").orEmpty()
+                ReaderScreen(bookId = id, onClose = { nav.closeReader() })
             }
         }
     }

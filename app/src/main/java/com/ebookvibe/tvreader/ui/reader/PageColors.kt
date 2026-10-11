@@ -44,7 +44,7 @@ object PageColors {
         )
 
     /** Returns the matrix for "apply [first], then [then]" (both 4x5, row-major). */
-    private fun concat(then: FloatArray, first: FloatArray): FloatArray {
+    internal fun concat(then: FloatArray, first: FloatArray): FloatArray {
         val out = FloatArray(20)
         for (row in 0 until 4) {
             for (col in 0 until 5) {
@@ -57,10 +57,10 @@ object PageColors {
     }
 
     // Light text (#E0E0E0-ish) on very dark grey (#141414): easier on the eyes than pure black/white.
-    private val darkMatrix = concat(range(20f, 20f, 22f, 224f, 224f, 220f), concat(hueRotate180, invert))
+    internal val darkMatrix = concat(range(20f, 20f, 22f, 224f, 224f, 220f), concat(hueRotate180, invert))
 
     // Warm paper (#F4E7CC) with dark brown ink (#3A2C1C); pulls blue out of the projector's white.
-    private val sepiaMatrix: FloatArray = run {
+    internal val sepiaMatrix: FloatArray = run {
         // Light desaturation first so colour images harmonise with the tint.
         val s = 0.75f
         val lr = 0.213f * (1 - s)
@@ -75,8 +75,14 @@ object PageColors {
         concat(range(58f, 44f, 28f, 244f, 231f, 204f), desat)
     }
 
-    private val dark = ColorFilter.colorMatrix(ColorMatrix(darkMatrix))
-    private val sepia = ColorFilter.colorMatrix(ColorMatrix(sepiaMatrix))
+    private val dark by lazy { ColorFilter.colorMatrix(ColorMatrix(darkMatrix)) }
+    private val sepia by lazy { ColorFilter.colorMatrix(ColorMatrix(sepiaMatrix)) }
+
+    /** Applies a 4x5 matrix to an opaque RGB colour (0..255), clamped. For tests and previews. */
+    internal fun apply(m: FloatArray, r: Float, g: Float, b: Float): FloatArray = FloatArray(3) { row ->
+        (m[row * 5] * r + m[row * 5 + 1] * g + m[row * 5 + 2] * b + m[row * 5 + 3] * 255f + m[row * 5 + 4])
+            .coerceIn(0f, 255f)
+    }
 
     fun filterFor(theme: PageTheme): ColorFilter? = when (theme) {
         PageTheme.LIGHT -> null
