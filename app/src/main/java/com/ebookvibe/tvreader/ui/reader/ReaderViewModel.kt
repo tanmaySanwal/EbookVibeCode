@@ -50,6 +50,18 @@ class ReaderViewModel(app: Application, private val bookId: String) : AndroidVie
 
     private val cache = PageCache(maxEntries = 3, maxBytes = cacheBudget(app), onEvict = ::recycleLater)
 
+    private val sleepTimer = SleepTimer(
+        scope = viewModelScope,
+        onUpdate = { sleep ->
+            _state.update {
+                val prompting = sleep.showStillReading && !it.sleep.showStillReading
+                // The "Still reading?" prompt takes over from any other dialog.
+                it.copy(sleep = sleep, dialog = if (prompting) ReaderDialog.NONE else it.dialog)
+            }
+        },
+        onExpired = ::onSleepExpired,
+    )
+
     private var renderJob: Job? = null
     private var saveJob: Job? = null
     private var hideJob: Job? = null
@@ -327,6 +339,36 @@ class ReaderViewModel(app: Application, private val bookId: String) : AndroidVie
     fun closeDialog() {
         _state.update { it.copy(dialog = ReaderDialog.NONE) }
         scheduleToolbarHide()
+    }
+
+    // ---------------------------------------------------------------- sleep timer
+
+    fun startSleepTimer(minutes: Int) {
+        sleepTimer.start(minutes)
+        closeDialog()
+    }
+
+    fun stopSleepTimer() {
+        sleepTimer.cancel()
+        closeDialog()
+    }
+
+    /** "+5 min" on the still-reading prompt. */
+    fun extendSleepTimer() {
+        sleepTimer.extend(5)
+        scheduleToolbarHide()
+    }
+
+    fun dismissStillReading() {
+        sleepTimer.dismissPrompt()
+        scheduleToolbarHide()
+    }
+
+    /** Timer ran out: save the page now; the UI fades to black and then closes the reader. */
+    private fun onSleepExpired() {
+        saveProgressNow()
+        hideJob?.cancel()
+        _state.update { it.copy(dialog = ReaderDialog.NONE, toolbarVisible = false) }
     }
 
     // ---------------------------------------------------------------- persistence

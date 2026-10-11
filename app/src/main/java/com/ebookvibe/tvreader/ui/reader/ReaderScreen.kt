@@ -53,6 +53,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -166,6 +167,8 @@ fun ReaderScreen(bookId: String, onClose: () -> Unit) {
             .fillMaxSize()
             .background(pageBackground(state.theme))
             .onPreviewKeyEvent { e ->
+                // Sleep timer expired: the screen is fading out, ignore the remote.
+                if (state.sleep.fadingOut) return@onPreviewKeyEvent true
                 // Any remote key (except BACK, which has its own job) wakes the toolbar.
                 if (e.type == KeyEventType.KeyDown && e.key != Key.Back && e.key != Key.Escape) {
                     vm.onUserActivity()
@@ -211,6 +214,20 @@ fun ReaderScreen(bookId: String, onClose: () -> Unit) {
             )
         }
 
+        state.sleep.remainingMs?.let { ms ->
+            if (!state.sleep.fadingOut) {
+                SleepBadge(
+                    ms,
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        // Sit under the top bar while it is showing.
+                        .padding(top = SafeMargin + if (state.toolbarVisible) 56.dp else 0.dp, end = SafeMargin),
+                )
+            }
+        }
+
+        if (state.sleep.fadingOut) FadeToBlack(onDone = onClose)
+
         modeHint?.let { hint ->
             Text(
                 hint,
@@ -236,6 +253,27 @@ fun ReaderScreen(bookId: String, onClose: () -> Unit) {
             },
             onDismiss = vm::closeDialog,
         )
+        ReaderDialog.SLEEP -> {
+            val active = state.sleep.remainingMs
+            OptionsDialog(
+                title = "Sleep timer",
+                subtitle = active?.let { "Closes the book in ${SleepTimer.format(it)}" } ?: "Close the book after…",
+                options = buildList {
+                    add(DialogOption("Off", selected = active == null, onClick = vm::stopSleepTimer))
+                    listOf(5, 10, 15, 30).forEach { m -> add(DialogOption("$m minutes") { vm.startSleepTimer(m) }) }
+                    add(DialogOption("Custom…") { vm.openDialog(ReaderDialog.SLEEP_CUSTOM) })
+                },
+                onDismiss = vm::closeDialog,
+            )
+        }
+        ReaderDialog.SLEEP_CUSTOM -> NumberPadDialog(
+            title = "Sleep after (minutes)",
+            hint = "1 – 240 minutes",
+            range = 1..240,
+            confirmLabel = "Start",
+            onConfirm = vm::startSleepTimer,
+            onDismiss = vm::closeDialog,
+        )
         ReaderDialog.ZOOM -> OptionsDialog(
             title = "Zoom",
             subtitle = "PDF text can't reflow, so bigger text = zoom",
@@ -248,6 +286,15 @@ fun ReaderScreen(bookId: String, onClose: () -> Unit) {
             onDismiss = vm::closeDialog,
         )
         else -> Unit
+    }
+
+    if (state.sleep.showStillReading && !state.sleep.fadingOut) {
+        StillReadingDialog(
+            remainingMs = state.sleep.remainingMs ?: 0,
+            onExtend = vm::extendSleepTimer,
+            onStop = vm::stopSleepTimer,
+            onDismiss = vm::dismissStillReading,
+        )
     }
 }
 
@@ -339,6 +386,10 @@ private fun Toolbar(
                     onClick = vm::nextPage,
                     modifier = Modifier.focusRequester(firstFocus),
                 )
+                TvButton(
+                    state.sleep.remainingMs?.let { "Sleep: " + SleepTimer.format(it) } ?: "Sleep: Off",
+                    onClick = { vm.openDialog(ReaderDialog.SLEEP) },
+                )
                 TvButton("Close", onClick = onClose)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -355,6 +406,60 @@ private fun Toolbar(
             )
         }
     }
+}
+
+@Composable
+private fun SleepBadge(remainingMs: Long, modifier: Modifier) {
+    val warning = remainingMs <= SleepTimer.PROMPT_BEFORE_MS
+    Text(
+        "☾  " + SleepTimer.format(remainingMs),
+        style = MaterialTheme.typography.titleMedium,
+        color = if (warning) Color.Black else Color.White,
+        modifier = modifier
+            .background(if (warning) Color(0xFFFFC107) else Color(0xB3000000), RoundedCornerShape(10.dp))
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    )
+}
+
+@Composable
+private fun StillReadingDialog(remainingMs: Long, onExtend: () -> Unit, onStop: () -> Unit, onDismiss: () -> Unit) {
+    val focus = remember { FocusRequester() }
+    Dialog(onDismissRequest = onDismiss) {
+        LaunchedEffect(Unit) {
+            withFrameNanos { }
+            runCatching { focus.requestFocus() }
+        }
+        Column(
+            Modifier
+                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(20.dp))
+                .padding(36.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text("Still reading?", style = MaterialTheme.typography.headlineMedium)
+            Text(
+                "The book closes in ${SleepTimer.format(remainingMs)}",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                TvButton("+5 min", onClick = onExtend, modifier = Modifier.focusRequester(focus))
+                TvButton("Turn timer off", onClick = onStop)
+            }
+        }
+    }
+}
+
+/** Sleep-timer ending: fade the page to black over a few seconds, then close the reader. */
+@Composable
+private fun FadeToBlack(onDone: () -> Unit) {
+    val alpha = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        alpha.animateTo(1f, tween(durationMillis = 3_000))
+        delay(300)
+        onDone()
+    }
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = alpha.value)))
 }
 
 private fun pageLabel(s: ReaderState) =
