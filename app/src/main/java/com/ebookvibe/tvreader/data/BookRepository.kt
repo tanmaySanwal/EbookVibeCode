@@ -57,7 +57,7 @@ class BookRepository(private val context: Context, private val scope: CoroutineS
         upsert(id) { old -> (old ?: Book(id = id, title = title)).copy(lastOpened = System.currentTimeMillis()) }
     }
 
-    private fun displayName(id: String): String {
+    fun displayName(id: String): String {
         if (!id.startsWith("content://")) return Book.titleFromPath(id)
         val name = runCatching {
             context.contentResolver.query(Uri.parse(id), arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
@@ -67,7 +67,7 @@ class BookRepository(private val context: Context, private val scope: CoroutineS
     }
 
     fun saveProgress(id: String, page: Int, pageCount: Int, zoom: String?) = upsert(id) { old ->
-        (old ?: Book(id = id, title = Book.titleFromPath(id)))
+        (old ?: Book(id = id, title = displayName(id)))
             .copy(lastPage = page, pageCount = pageCount, zoom = zoom)
     }
 
